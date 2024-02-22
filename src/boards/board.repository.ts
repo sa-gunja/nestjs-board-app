@@ -1,8 +1,9 @@
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, Not, Repository } from 'typeorm';
 import { Board } from './board.entity';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateBoardDTO } from './DTO/create-board.dto';
 import { BoardStatus } from './board-status.enum';
+import { User } from 'src/auth/user.entity';
 
 @Injectable()
 export class BoardRepository extends Repository<Board> {
@@ -10,12 +11,17 @@ export class BoardRepository extends Repository<Board> {
     super(Board, dataSource.createEntityManager());
   }
 
-  async createBoard(createBoardDTO: CreateBoardDTO): Promise<Board> {
+  async createBoard(
+    createBoardDTO: CreateBoardDTO,
+    user: User,
+  ): Promise<Board> {
     const { title, description } = createBoardDTO;
+
     const board = this.create({
       title,
       description,
       status: BoardStatus.PUBLIC,
+      user,
     });
     await this.save(board);
     return board;
@@ -33,20 +39,36 @@ export class BoardRepository extends Repository<Board> {
     return board;
   }
 
-  async deleteBoard(id: number): Promise<void> {
-    const result = await this.delete(id);
+  async deleteBoard(id: number, user: User): Promise<void> {
+    const result = await this.delete({ id, user });
     if (result.affected === 0)
       throw new NotFoundException(`Can't find with id ${id}`);
   }
 
-  async updateBoardStatus(id: number, status: BoardStatus): Promise<Board> {
+  async updateBoardStatus(
+    id: number,
+    status: BoardStatus,
+    user: User,
+  ): Promise<Board> {
     const board = await this.getBoardById(id);
+    const result = await this.update({ id: board.id, user: user }, { status });
+    if (result.affected === 0)
+      throw new NotFoundException(`It's not your board ${id}`);
     board.status = status;
-    await this.save(board);
+    // await this.save(board);
+
     return board;
   }
 
-  async getAllBoards(): Promise<Board[]> {
-    return await this.find({ order: { id: 'desc' } });
+  async getAllBoards(user: User): Promise<Board[]> {
+    const query = this.createQueryBuilder('board');
+    query.where('board.userId = :userId', { userId: user.id });
+    query.orderBy('id', 'DESC');
+    const boards = await query.getMany();
+    return boards;
+    // return await this.find({
+    //   where: { user: user },
+    //   order: { id: 'desc' },
+    // });
   }
 }
