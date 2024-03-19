@@ -11,6 +11,7 @@ export class BoardRepository extends Repository<Board> {
     super(Board, dataSource.createEntityManager());
   }
 
+  // test
   async createBoard(
     createBoardDTO: CreateBoardDTO,
     user: User,
